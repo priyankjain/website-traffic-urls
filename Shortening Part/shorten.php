@@ -1,4 +1,6 @@
 <?php
+require_once("config.php");
+require_once('twitteroauth/twitteroauth.php');
 set_time_limit(36000);
 function curl($url = '', $var = '', $header = false, $nobody = false) {
     global $config, $sock;
@@ -67,6 +69,9 @@ function cleanup($response){
     $response=str_replace(" ", "",$response);
     return $response;
 }
+
+//Authenticate to twitter
+$connection = new TwitterOAuth($config['key'],$config['secret'],$config['access_token'],$config['access_token_secret']);
 
 //Get bit.ly API keys
 $file = fopen("bitly.txt","r");
