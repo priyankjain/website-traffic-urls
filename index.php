@@ -49,7 +49,8 @@ function cleanup($response){
 }
 
 //Authenticate to twitter
-$connection = new TwitterOAuth($config['key'],$config['secret'],$config['access_token'],$config['access_token_secret']);
+$app_no = 0;
+$connection = new TwitterOAuth($config[0]['key'],$config[0]['secret'],$config[0]['access_token'],$config[0]['access_token_secret']);
 
 //Get bit.ly API keys
 $bitly_access_token = $config['bitly_access_token'];
@@ -71,45 +72,71 @@ $tco_file = fopen("tco.txt","a+");
 $count_file = fopen("count.txt","w");
 function shorten_url()
 {
-    global $bitly_access_token,$long_url,$bitly_file,$owly_file,$owly_access_token, $count_file,$count,$tco_file,$connection;
+    global $bitly_access_token,$long_url,$owly_access_token, $count_file,$count,$tco_file,$connection,$app_no,$config;
     //Get short link from bit.ly
-    $api_address = "https://api-ssl.bitly.com";
-    $method_address = "/v3/shorten";
-    $parameters = "access_token=".$bitly_access_token."&longUrl=".$long_url."?".$count;
-    $response = plain_curl ($api_address.$method_address,$parameters);
-    echo $response.'<br/>';
-    $response = json_decode($response);
-    $status = $connection->post('statuses/update', array('status' => $response->data->url));
-    var_dump($status);
-    echo '<br/>';
-    if(empty($status->errors))
-    fputs($tco_file,$status->entities->urls[0]->url.PHP_EOL);
 
-    //Get short link from ow.ly
-    $api_address="http://ow.ly/api/1.1/url/shorten";
-    $parameters = "apiKey=".$owly_access_token."&longUrl=".$long_url."?".$count;
-    $response = plain_curl($api_address,$parameters);
-    echo $response.'<br/>';
-    $response = json_decode($response);
-    $status = $connection->post('statuses/update', array('status' => $response->results->shortUrl));
-    var_dump($status);
-    echo '<br/>';
-    if(empty($status->errors))
-    fputs($tco_file,$status->entities->urls[0]->url.PHP_EOL);
+    $urls=array();
+    for($i=0; $i<3;$i++){
+        $response = null;
+        $error = true;
+        while($error){
+            $response = plain_curl ("https://api-ssl.bitly.com/v3/shorten","access_token=".$bitly_access_token."&longUrl=".$long_url."?".$count);
+            echo $response.'<br/>';
+            $response = json_decode($response);
+            if($response->status_code == 200) $error = false;
+            else sleep(1);
+        }
+        $urls[] = $response->data->url;
+        
+        //Get short link from ow.ly
+        $response = null;
+        $error = true;
+        while($error){
+            $response = plain_curl ("http://ow.ly/api/1.1/url/shorten","apiKey=".$owly_access_token."&longUrl=".$long_url."?".$count);
+            echo $response.'<br/>';
+            $response = json_decode($response);
+            if(empty($response->error)) $error = false;
+            else sleep(1);
+        }
+        $urls[] = $response->results->shortUrl;
+        $count++;
+    }
+    $tweeted = false;
+    $tweet= implode(" ",$urls);
+    $limit_count = 0;
+    while(! $tweeted){
+        if($limit_count == 4) {
+            echo 'Exiting as either all four twitter API keys are invalid or daily status update limit has been reached for all';
+            exit;
+        }
+        $status = $connection->post('statuses/update', array('status' => $tweet));
+        if(empty($status->errors))
+        {
+            for($i=0;$i<6;$i++){
+                if(isset($status->entities->urls[$i]))
+                fputs($tco_file,$status->entities->urls[$i]->url.PHP_EOL);
+            }
+            $tweeted = true;
+        }
+        else
+        {
+            $limit_count++;
+            echo '<br/>Credentials '.$app_no.' rate limited<br/>';
+            var_dump($status);
+            $app_no = ($app_no+1) % 4;
+            $connection = new TwitterOAuth($config[$app_no]['key'],$config[$app_no]['secret'],$config[$app_no]['access_token'],$config[$app_no]['access_token_secret']);
+            //Code to change to next api
+        }
 
-    $count++;
+    }
     rewind($count_file);
     fputs($count_file,$count);
 }
 
 //Call the shortening apis and store the shortened links
-for($i = 0; $i <= 1000; $i++)
+// for($i = 0; $i <= 1000; $i++)
 shorten_url();
 
-// $status = $connection->get('application/rate_limit_status');
-// echo '<pre>';
-// var_dump($status);
-// echo '</pre>';
-
+fclose($tco_file);
 fclose($count_file);
 ?>
