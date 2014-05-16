@@ -104,10 +104,11 @@ function shorten_url()
     $tweeted = false;
     $tweet= implode(" ",$urls);
     $limit_count = 0;
+    $status = null;
     while(! $tweeted){
         if($limit_count == 4) {
-            echo 'Exiting as either all four twitter API keys are invalid or daily status update limit has been reached for all';
-            exit;
+            echo 'Sleeping for 10 minutes as either all four twitter API keys are invalid or daily status update limit has been reached for all';
+            sleep(600);
         }
         $status = $connection->post('statuses/update', array('status' => $tweet));
         if(empty($status->errors))
@@ -134,7 +135,7 @@ function shorten_url()
 }
 
 //Call the shortening apis and store the shortened links
-// for($i = 0; $i <= 1000; $i++)
+for($i = 0; $i <= 10000; $i++)
 shorten_url();
 
 fclose($tco_file);
